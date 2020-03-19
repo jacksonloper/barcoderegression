@@ -8,7 +8,7 @@ import numpy.linalg
 import re
 import numpy.random as npr
 
-from .helpers import optional,nonnegative_update,clip,phasing,loss_at_q
+from .helpers import optional,nonnegative_update,clip,phasing,quadratic_form_to_nnls_form
 
 class Model:
     def __init__(self,B,K,M=None,F=None,a=None,b=None,alpha=None,rho=None,varphi=None,
@@ -75,13 +75,14 @@ class Model:
         self.nobs = self.M*self.R*self.C
 
     # code for saving parameters
-    _props = ['F','a','b','alpha','varphi','rho','K','B']
+    _props = ['F','a','b','alpha','varphi','rho','B']
+    _immutable_props = ['K','lam','lo']
     def snapshot(self):
-        return {x:getattr(self,x) for x in self._props}
+        return {x:getattr(self,x) for x in (self._props+self._immutable_props)}
 
     def copy(self):
-        snap=self.snapshot()
-        snap={x:snap[x].copy() for x in snap}
+        snap = {x:getattr(self,x).copy() for x in self._props}
+        snap.update({x:getattr(self,x) for x in self._immutable_props})
         return Model(**snap)
 
     # intensity scaled to show total contribution of a gene to the original images
@@ -98,7 +99,7 @@ class Model:
     def frame_loadings(self,rho=None,alpha=None,varphi=None,F_blurred=None):
         alpha=optional(alpha,self.alpha)
         varphi=optional(varphi,self.varphi)
-        return alpha[:,:,None]*np.einsum('ck, rkj -> rkj',varphi,self.Z(rho))
+        return np.einsum('rc,ck, rkj -> rcj',alpha,varphi,self.Z(rho))
     def gene_reconstruction(self,rho=None,alpha=None,varphi=None):
         frame_loadings = self.frame_loadings(rho=rho,alpha=alpha,varphi=varphi)
         return np.einsum('mj,rcj->mrc',self.F_blurred,frame_loadings)
@@ -114,7 +115,7 @@ class Model:
         FbmixedZ[m,r,c] = sum_jc' F_blurred[m,j] * varphi[c,c'] * Z[r,c',j]
         '''
 
-        mixedZ = np.einsum('ck, rkj -> rkj',self.varphi,self.Z())
+        mixedZ =np.einsum('ck, rkj -> rcj',self.varphi,self.Z(self.rho))
         FbmixedZ = np.einsum('rcj,mj -> mrc',mixedZ,self.F_blurred)
         return FbmixedZ
 
@@ -133,7 +134,8 @@ class Model:
             l1 = l1_loss,
             lam=lam,
         )
-        lossinfo['loss'] = (lossinfo['reconstruction'] + lam*lossinfo['l1'])/self.nobs
+        lossinfo['undivided_loss']=lossinfo['reconstruction'] + lam*lossinfo['l1']
+        lossinfo['loss'] = lossinfo['undivided_loss']/self.nobs
 
         return lossinfo
 
@@ -207,3 +209,18 @@ class Model:
 
         # do cliping
         self.alpha=clip(alpha,self.lo)
+
+    def update_varphi(self,X):
+        Z=self.Z() # R x C x J
+        xmabl = X - self.ab_reconstruction() - self.lam # M x R x C
+        F=self.F_blurred # M x J
+
+        FZ = np.einsum('mj,rcj->mrc',F,Z)
+        FZ_gamma = np.einsum('mrc,mrk->rck',FZ,FZ)
+
+        for c1 in range(self.C):
+            c1=npr.randint(0,self.C)
+            Gamma_c = np.einsum('r,rck->ck',self.alpha[:,c1]**2,FZ_gamma)
+            phi_c = np.einsum('r,mr,mrc->c',self.alpha[:,c1],xmabl[:,:,c1],FZ)
+            A,b=quadratic_form_to_nnls_form(Gamma_c,phi_c)
+            self.varphi[c1]= sp.optimize.nnls(A,b)[0]

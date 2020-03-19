@@ -7,7 +7,7 @@ import numpy.random as npr
 
 from . import blurkernels
 
-def simulation(R,C,J,spatial_dims,num_spots,blursize,noise,rho=None,anoise=.1,bnoise=.1,lam=0,lo=1e-10):
+def simulation(R,C,J,spatial_dims,num_spots,blursize,noise,rho=None,anoise=.1,bnoise=.1,lam=0,lo=1e-10,varphinoise=.1):
     spatial_dims=tuple(spatial_dims)
     dims=spatial_dims+(R,C)
     dims_Y=spatial_dims+(J,)
@@ -19,11 +19,11 @@ def simulation(R,C,J,spatial_dims,num_spots,blursize,noise,rho=None,anoise=.1,bn
     alpha=np.ones((R,C)) + npr.rand(R,C)*.1
 
     # sample g
-    g = np.eye(C) + npr.rand(C,C)*.1
+    g = np.eye(C) + npr.rand(C,C)*varphinoise
 
     # sample ground truth Fs
     F = np.zeros(dims_Y)
-    F[tuple([npr.randint(0,x,size=num_spots) for x in dims_Y])]=1
+    F[tuple([npr.randint(0,x,size=num_spots) for x in dims_Y])]=20
     K=blurkernels.ContiguousBlur(spatial_dims,blursize)
     F_blurred =K@F
 

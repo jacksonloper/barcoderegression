@@ -23,61 +23,10 @@ def phasing(B,q):
         Z[r] = q[:, None]*Z[r-1] + B[r]
     return Z
 
-
-def loss_at_q(X,spinfo,barcode,lam):
-    X=X.reshape((spinfo.M,barcode.N))
-    Xmab = X - spinfo.arav[:,None] - barcode.brav[None,:]
-
-    def laq(q):
-        Z=phasing(barcode.B,q)
-        Gtilde = np.einsum('ck, rkj -> rkj',barcode.g,Z)
-        G= Gtilde*barcode.alpha[:,:,None]
-        Grav = G.reshape((barcode.N,barcode.J))
-
-        reconstruction_loss = np.sum((Xmab - spinfo.Frav@Grav.T)**2)
-        l1_loss = np.sum(spinfo.Frav @ Grav.T)
-
-        return .5*reconstruction_loss + .5*lam*l1_loss
-
-    return laq
-
-
-def loss(X,spinfo,barcode,lam,eps):
-    '''
-    Input:
-    - X -- (dims[0],dims[1] ..., dims[-1], number of rounds, number of channels)
-    - spinfo -- SpatialInfo object
-    - barcode -- Barcode object
-    - lam -- scalar
-    - eps -- scalar
-
-    Evaluates the the objective
-
-      L = .5*|X - F G^T - a1 - b1|^2_2 + .5*lam |FG^T|_1 + .5*eps |Y|^2
-
-    Returns a dictionary indicating various features of this loss:
-    - the "reconstruction", i.e. .5*|X - F G^T - a1 - b1|^2_2
-    - the "l1", i.e. .5*|FG^T|_1
-    - the "l2", i.e. .5*|Y|^2
-    - "overall" -- the whole loss put together
-    '''
-
-    X=X.reshape((spinfo.M,barcode.N))
-    FGt=spinfo.Frav@barcode.Grav.T
-
-    resid = X - FGt - spinfo.arav[:,None] - barcode.brav[None,:]
-
-    lossinfo= dict(
-        reconstruction = .5*np.sum(resid**2),
-        l1 = .5*np.sum(FGt),
-        l2 = .5*np.sum(spinfo.Y**2),
-        lam=lam,
-        eps=eps
-    )
-
-    lossinfo['overall']=lossinfo['reconstruction'] + lam*lossinfo['l1'] + eps*lossinfo['l2']
-    return lossinfo
-
+def quadratic_form_to_nnls_form(Gamma,phi,lo=1e-10):
+    A=sp.linalg.cholesky(Gamma+np.eye(Gamma.shape[0])*lo,lower=False)
+    b=np.linalg.solve(A.T,phi)
+    return A,b
 
 def nonnegative_update(apply_Gamma,phi,y,lo=0,backtracking=.9,maxiter=10):
     '''
