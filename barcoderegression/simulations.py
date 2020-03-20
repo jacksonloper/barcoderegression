@@ -7,6 +7,48 @@ import numpy.random as npr
 
 from . import blurkernels
 
+def simulation_from_B(B,spatial_dims,num_spots,blursize,noise=.1,lo=1e-10,lam=.1,genedistr=None):
+    spatial_dims=tuple(spatial_dims)
+    R,C=B.shape[:2]
+    J=B.shape[-1]
+    dims=spatial_dims+(R,C)
+    dims_F=spatial_dims+(J,)
+
+    if genedistr is None:
+        genedistr=np.ones(J)/J
+
+    rho=np.zeros(C)
+    alpha=npr.rand(R,C)+.2
+    varphi=np.eye(C)
+
+    # sample ground truth Fs
+    M = np.prod(spatial_dims)
+    positions = npr.randint(0,M,size=num_spots)
+    genes = npr.choice(J,p=genedistr,size=num_spots)
+
+
+    F = np.zeros((M,J))
+    F[positions,genes]=npr.rand(num_spots)*30+10
+    K=blurkernels.ContiguousBlur(spatial_dims,blursize)
+    F_blurred =K@F
+
+
+    # make frame_loadings
+    Z=helpers.phasing(B,rho)
+    Gtilde = np.einsum('ck, rkj -> rkj',varphi,Z)
+    frame_loadings = Gtilde*alpha[:,:,None]
+
+    # make a b
+    a=np.zeros(spatial_dims).ravel()
+    b=np.zeros((R,C))
+
+    # get it
+    model=parameters.Model(B,K,F=F.reshape((-1,J)),a=a,b=b,alpha=alpha,rho=rho,varphi=varphi,lo=lo,lam=lam)
+    X_without_noise=model.reconstruction()
+    X=X_without_noise+npr.rand(*X_without_noise.shape)*noise
+
+    return model,X,X_without_noise
+
 def simulation(R,C,J,spatial_dims,num_spots,blursize,noise,rho=None,anoise=.1,bnoise=.1,lam=0,lo=1e-10,varphinoise=.1):
     spatial_dims=tuple(spatial_dims)
     dims=spatial_dims+(R,C)

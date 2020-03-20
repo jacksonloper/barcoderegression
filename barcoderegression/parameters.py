@@ -66,11 +66,11 @@ class Model:
         self.F_blurred=self.K@self.F
 
         # handle all the other initializations
-        self.a=optional(a,np.zeros(self.M),'a')
-        self.b=optional(b,np.zeros((self.R,self.C)),'b')
-        self.alpha=optional(alpha,np.ones((self.R,self.C)),'alpha')
-        self.varphi=optional(varphi,np.eye(self.C),'varphi')
-        self.rho=optional(rho,np.zeros(self.C),'rho')
+        self.a=optional(a,lambda: np.zeros(self.M),'a')
+        self.b=optional(b,lambda: np.zeros((self.R,self.C)),'b')
+        self.alpha=optional(alpha,lambda: np.ones((self.R,self.C)),'alpha')
+        self.varphi=optional(varphi,lambda: np.eye(self.C),'varphi')
+        self.rho=optional(rho,lambda: np.zeros(self.C),'rho')
 
         self.nobs = self.M*self.R*self.C
 
@@ -95,16 +95,16 @@ class Model:
 
     # (perturbable) reconstructions
     def Z(self,rho=None):
-        return phasing(self.B,optional(rho,self.rho))
+        return phasing(self.B,optional(rho,lambda: self.rho))
     def frame_loadings(self,rho=None,alpha=None,varphi=None,F_blurred=None):
-        alpha=optional(alpha,self.alpha)
-        varphi=optional(varphi,self.varphi)
+        alpha=optional(alpha,lambda: self.alpha)
+        varphi=optional(varphi,lambda: self.varphi)
         return np.einsum('rc,ck, rkj -> rcj',alpha,varphi,self.Z(rho))
     def gene_reconstruction(self,rho=None,alpha=None,varphi=None):
         frame_loadings = self.frame_loadings(rho=rho,alpha=alpha,varphi=varphi)
         return np.einsum('mj,rcj->mrc',self.F_blurred,frame_loadings)
     def ab_reconstruction(self,a=None,b=None):
-        return optional(b,self.b)[None,:,:] + optional(a,self.a)[:,None,None]
+        return optional(b,lambda: self.b)[None,:,:] + optional(a,lambda: self.a)[:,None,None]
     def reconstruction(self,a=None,b=None,rho=None,alpha=None,varphi=None,F_blurred=None):
         return self.ab_reconstruction(a=a,b=b) + self.gene_reconstruction(rho=rho,alpha=alpha,
             varphi=varphi)
@@ -123,7 +123,7 @@ class Model:
     def loss(self,X,a=None,b=None,rho=None,alpha=None,varphi=None,F_blurred=None,lam=None):
         ab_recon = self.ab_reconstruction(a=a,b=b)
         gene_recon = self.gene_reconstruction(rho=rho,alpha=alpha,varphi=varphi)
-        lam=optional(lam,self.lam)
+        lam=optional(lam,lambda: self.lam)
 
         reconstruction_loss = .5*np.sum((X-ab_recon - gene_recon)**2)
         l1_loss = np.sum(gene_recon)
@@ -158,24 +158,34 @@ class Model:
         # collect some things we'll need later
         framel1 = np.sum(frame_loadings,axis=0)
         framel2 = np.sum(frame_loadings**2,axis=0)
+
+        xmabl= (X - self.ab_reconstruction() - self.lam).reshape((self.M,N))
+        Kxmabl = self.K @ xmabl
         riemannian = frame_loadings.T@ frame_loadings
 
         # updating Y, one column at at time (in a random order)
         for j in npr.permutation(self.J):
             '''
             get the quadratic form relevant to F[:,j]
+
+            basically this:
+                recon = self.reconstruction().reshape((self.M,N))
+                recon_without_j_loadings = recon - np.outer(self.F_blurred[:,j],frame_loadings[:,j])
+                residual_without_j_loadings = X.reshape((self.M,N)) - recon_without_j_loadings
+                phi = self.K @ (residual_without_j_loadings - self.lam) @ frame_loadings[:,j]
+
+            but that's kind of slow to do for every j.  so, instead:
             '''
 
-            recon = self.reconstruction().reshape((self.M,N))
-            recon_without_j_loadings = recon - np.outer(self.F_blurred[:,j],frame_loadings[:,j])
-            residual_without_j_loadings = X.reshape((self.M,N)) - recon_without_j_loadings
+            phi = Kxmabl @ frame_loadings[:,j] - self.F_blurred@riemannian[:,j] + self.F_blurred[:,j]*framel2[j]
 
-            def apply_Gamma(x):
-                return framel2[j]*(self.K.H@(self.K@x))
-            phi = self.K @ (residual_without_j_loadings - self.lam) @ frame_loadings[:,j]
+            if self.K.trivial:
+                F[:,j] = np.clip(phi / framel2[j],0,None)
+            else:
+                def apply_Gamma(x):
+                    return framel2[j]*(self.K.H@(self.K@x))
+                F[:,j] = nonnegative_update(apply_Gamma,phi,F[:,j])
 
-            # make the update
-            F[:,j] = nonnegative_update(apply_Gamma,phi,F[:,j])
             self.F_blurred[:,j] = self.K@F[:,j]
 
     def update_rho(self,X,attempts=3):

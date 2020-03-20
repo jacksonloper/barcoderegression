@@ -5,12 +5,9 @@ import scipy.ndimage
 
 def optional(x,y,nm=''):
     if x is None:
-        return y
+        return y()
     else:
-        x=np.require(x)
-        if x.shape!=y.shape:
-            raise ValueError(f"shape for parameter {nm} should be {y.shape}, not {x.shape}")
-        return x
+        return np.require(x)
 
 def clip(x,lo=0):
     return np.clip(x,lo,None)

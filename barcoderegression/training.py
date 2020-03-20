@@ -27,3 +27,29 @@ class Trainer:
         for nm in nms:
             getattr(self.model,'update_'+nm)(self.Xrav)
             self.record_loss(nm)
+
+    def train_tqdm_notebook(self,nms,iters):
+        import tqdm.notebook
+        trange=tqdm.notebook.tqdm(range(iters))
+        for i in trange:
+            self.update(nms=nms)
+            trange.set_description(str(self.losses[-1]['reconstruction']))
+
+    def status(self):
+        import matplotlib.pylab as plt
+        overall_losses=[x['loss'] for x in self.losses]
+        worst=np.diff(overall_losses).max()
+        if worst<=0:
+            print("we never went the wrong way!")
+        else:
+            print("we went wrong way",worst)
+        plt.plot(overall_losses,'-o')
+
+        lossinfo=self.model.loss(self.Xrav)
+        print('final reconstruction loss per obs',lossinfo['reconstruction']/self.model.nobs)
+        print('final L1 loss perobs',self.model.lam*lossinfo['l1']/self.model.nobs)
+        print('final loss',lossinfo['loss'])
+
+        bads=[x for x in self.losses if x['improvement']<0]
+        for b in bads:
+            print(b['action'],b['reconstruction'],b['improvement'])
