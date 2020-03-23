@@ -121,12 +121,12 @@ class Model:
 
     # loss
     def loss(self,X,a=None,b=None,rho=None,alpha=None,varphi=None,F_blurred=None,lam=None):
-        ab_recon = self.ab_reconstruction(a=a,b=b)
-        gene_recon = self.gene_reconstruction(rho=rho,alpha=alpha,varphi=varphi)
+        ab_recon = self.ab_reconstruction(a=a,b=b) # a1 + 1b
+        gene_recon = self.gene_reconstruction(rho=rho,alpha=alpha,varphi=varphi) # KFG
         lam=optional(lam,lambda: self.lam)
 
         reconstruction_loss = .5*np.sum((X-ab_recon - gene_recon)**2)
-        l1_loss = np.sum(gene_recon)
+        l1_loss = np.sum(gene_recon)  # L1_loss = |KFG^T|_1
 
 
         lossinfo= dict(
@@ -153,31 +153,33 @@ class Model:
         F=self.F
 
         # just the
-        frame_loadings = self.frame_loadings().reshape((N,self.J))
+        G = self.frame_loadings().reshape((N,self.J))
 
-        # collect some things we'll need later
-        framel1 = np.sum(frame_loadings,axis=0)
-        framel2 = np.sum(frame_loadings**2,axis=0)
+        # collect fr things we'll need later
+        framel1 = np.sum(G,axis=0)
+        framel2 = np.sum(G**2,axis=0)
 
         xmabl= (X - self.ab_reconstruction() - self.lam).reshape((self.M,N))
         Kxmabl = self.K @ xmabl
-        riemannian = frame_loadings.T@ frame_loadings
+        riemannian = G.T@ G
 
         # updating Y, one column at at time (in a random order)
         for j in npr.permutation(self.J):
             '''
             get the quadratic form relevant to F[:,j]
 
+            loss(F[:,j]) = .5*F[:,j].T Gamma F[:,j] - phi^T F[:,j]
+
             basically this:
                 recon = self.reconstruction().reshape((self.M,N))
-                recon_without_j_loadings = recon - np.outer(self.F_blurred[:,j],frame_loadings[:,j])
+                recon_without_j_loadings = recon - np.outer(self.F_blurred[:,j],G[:,j])
                 residual_without_j_loadings = X.reshape((self.M,N)) - recon_without_j_loadings
-                phi = self.K @ (residual_without_j_loadings - self.lam) @ frame_loadings[:,j]
+                phi = self.K @ (residual_without_j_loadings - self.lam) @ G[:,j]
 
             but that's kind of slow to do for every j.  so, instead:
             '''
 
-            phi = Kxmabl @ frame_loadings[:,j] - self.F_blurred@riemannian[:,j] + self.F_blurred[:,j]*framel2[j]
+            phi = self.K@(xmabl @ G[:,j] - self.F_blurred@riemannian[:,j] + self.F_blurred[:,j]*framel2[j])
 
             if self.K.trivial:
                 F[:,j] = np.clip(phi / framel2[j],0,None)
