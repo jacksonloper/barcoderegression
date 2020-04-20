@@ -17,7 +17,7 @@ def plot_raw_data_2d(X):
 
                 plt.imshow(X[:,:,r,c],vmin=0,vmax=X.max())
 
-def plotspot(X,loc,barcode=None,radius=10,sz=1):
+def plotspot(X,loc,barcode=None,radius=10,sz=1,sideplot=False):
     loc=np.array(loc)
     st=np.max([np.zeros(len(loc)),loc-radius],axis=0)
     center = loc-st
@@ -54,29 +54,30 @@ def plotspot(X,loc,barcode=None,radius=10,sz=1):
                     # plt.plot([center[1]],[center[0]],'ro',ms=20,alpha=.5)
 
 
-    plt.gcf().add_axes([C,1,3,3],label="centerline")
-    center_vals= X[tuple(loc)].reshape((R,C))
-    center_means=Xsub
-    center_stds=Xsub
-    for i in range(len(spdims)):
-        center_means=np.mean(center_means,axis=0)
-        center_stds=np.std(center_stds,axis=0)
-    measurements=(center_vals - center_means) / center_stds
-    measurements=np.array([m[x] for (x,m) in zip(order,measurements)])
-    plt.imshow(measurements,vmin=0,vmax=3)
-    plt.axis('off')
+    if sideplot:
+        plt.gcf().add_axes([C,1,3,3],label="centerline")
+        center_vals= X[tuple(loc)].reshape((R,C))
+        center_means=Xsub
+        center_stds=Xsub
+        for i in range(len(spdims)):
+            center_means=np.mean(center_means,axis=0)
+            center_stds=np.std(center_stds,axis=0)
+        measurements=(center_vals - center_means) / center_stds
+        measurements=np.array([m[x] for (x,m) in zip(order,measurements)])
+        plt.imshow(measurements,vmin=0,vmax=3)
+        plt.axis('off')
 
-    plt.gcf().add_axes([C,4.2,3,3],label="centerline")
-    center_vals= X[tuple(loc)].reshape((R,C))
-    center_means=X
-    center_stds=X
-    for i in range(len(spdims)):
-        center_means=np.mean(center_means,axis=0)
-        center_stds=np.max(center_stds,axis=0)
-    measurements=center_vals / center_stds
-    measurements=np.array([m[x] for (x,m) in zip(order,measurements)])
-    plt.imshow(measurements,vmin=0,vmax=1)
-    plt.axis('off')
+        plt.gcf().add_axes([C,4.2,3,3],label="centerline")
+        center_vals= X[tuple(loc)].reshape((R,C))
+        center_means=X
+        center_stds=X
+        for i in range(len(spdims)):
+            center_means=np.mean(center_means,axis=0)
+            center_stds=np.max(center_stds,axis=0)
+        measurements=center_vals / center_stds
+        measurements=np.array([m[x] for (x,m) in zip(order,measurements)])
+        plt.imshow(measurements,vmin=0,vmax=1)
+        plt.axis('off')
 
 class AnimAcross:
     def __init__(self,ratio=.8,sz=4,columns=None,aa=None):
