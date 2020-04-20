@@ -6,5 +6,7 @@ setup(
     version='0.0.1',
     description='Tools for deconvolution and demixing',
     packages=['barcoderegression'],
-    package_data={'barcoderegression': ['example.pkl']}
+    package_data={
+        'barcoderegression': ['*.pkl']
+    }
 )
