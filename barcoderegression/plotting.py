@@ -1,6 +1,22 @@
 import matplotlib.pylab as plt
 import numpy as np
 
+def plot_raw_data_2d(X):
+    X=np.require(X)
+    assert len(X.shape)==4,f"shape should be (spatialdim1,spatialdim2,rows,cols), but was given {X.shape}"
+
+    R,C=X.shape[-2:]
+    with AnimAcross(columns=C) as a:
+        for r in range(R):
+            for c in range(C):
+                ~a
+                if r==0:
+                    plt.title(f"Ch:{c}",fontsize=30)
+                if c==0:
+                    plt.ylabel(f"Ch:{c}",fontsize=30)
+
+                plt.imshow(X[:,:,r,c],vmin=0,vmax=X.max())
+
 def plotspot(X,loc,barcode=None,radius=10,sz=1):
     loc=np.array(loc)
     st=np.max([np.zeros(len(loc)),loc-radius],axis=0)

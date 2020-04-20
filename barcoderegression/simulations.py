@@ -18,25 +18,19 @@ def simulation_from_B(B,spatial_dims,num_spots,blursize,noise=.1,lo=1e-10,lam=.1
         genedistr=np.ones(J)/J
 
     rho=np.zeros(C)
-    alpha=npr.rand(R,C)+.2
+    alpha=npr.rand(R,C)+.2  # Uniform[.2,1.2]
     varphi=np.eye(C)
 
     # sample ground truth Fs
     M = np.prod(spatial_dims)
     positions = npr.randint(0,M,size=num_spots)
-    genes = npr.choice(J,p=genedistr,size=num_spots)
+    genes = npr.choice(J,p=genedistr,size=num_spots)  # genes[i] ~ Categorical(genedistr)
 
-
+    # make the spatial loadings
     F = np.zeros((M,J))
-    F[positions,genes]=npr.rand(num_spots)*30+10
+    F[positions,genes]=npr.rand(num_spots)*30+10  # brightness ~ Uniform[10,40]
     K=blurkernels.ContiguousBlur(spatial_dims,blursize)
     F_blurred =K@F
-
-
-    # make frame_loadings
-    Z=helpers.phasing(B,rho)
-    Gtilde = np.einsum('ck, rkj -> rkj',varphi,Z)
-    frame_loadings = Gtilde*alpha[:,:,None]
 
     # make a b
     a=np.zeros(spatial_dims).ravel()
@@ -44,8 +38,8 @@ def simulation_from_B(B,spatial_dims,num_spots,blursize,noise=.1,lo=1e-10,lam=.1
 
     # get it
     model=parameters.Model(B,K,F=F.reshape((-1,J)),a=a,b=b,alpha=alpha,rho=rho,varphi=varphi,lo=lo,lam=lam)
-    X_without_noise=model.reconstruction()
-    X=X_without_noise+npr.rand(*X_without_noise.shape)*noise
+    X_without_noise=model.reconstruction()  # FG^T + a1 + 1b
+    X=X_without_noise+npr.rand(*X_without_noise.shape)*noise  # FG^T +a1 +1b + noise
 
     return model,X,X_without_noise
 
