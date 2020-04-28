@@ -12,7 +12,7 @@ from .helpers import optional,nonnegative_update,clip,phasing,quadratic_form_to_
 
 class Model:
     def __init__(self,B,K,M=None,F=None,a=None,b=None,alpha=None,rho=None,varphi=None,
-                        lo=1e-10,lam=0):
+                        lo=1e-10,lam=0,sigsq=None):
         '''
         A Model object holds the parameters for our model
 
@@ -28,6 +28,7 @@ class Model:
         - [optional] varphi -- ndarray of shape C x C
         - [optional] lo -- scalar, smallest possible value of alpha
         - [optional] lam -- magnitude of L1 penalty on gene reconstruction
+        - [optional] sigsq -- ndarray of shape R x C
 
         If the optional parameters are not given, they will be initialized
         automatically.  One caveat to this is F and M -- one or the other
@@ -71,6 +72,7 @@ class Model:
         self.alpha=optional(alpha,lambda: np.ones((self.R,self.C)),'alpha')
         self.varphi=optional(varphi,lambda: np.eye(self.C),'varphi')
         self.rho=optional(rho,lambda: np.zeros(self.C),'rho')
+        self.sigsq=optional(sigsq,lambda: np.ones((self.R,self.C)),'sigsq')
 
         self.nobs = self.M*self.R*self.C
 
@@ -125,9 +127,9 @@ class Model:
         gene_recon = self.gene_reconstruction(rho=rho,alpha=alpha,varphi=varphi) # KFG
         lam=optional(lam,lambda: self.lam)
 
-        reconstruction_loss = .5*np.sum((X-ab_recon - gene_recon)**2)
+        reconstruction_loss = .5*np.sum((X-ab_recon - gene_recon)**2/(self.sigsq[None,:,:])) # data
+        reconstrution_loss = reconstruction_loss +.5*np.sum(np.log(2*np.pi*self.sigsq))*self.M # normalizer
         l1_loss = np.sum(gene_recon)  # L1_loss = |KFG^T|_1
-
 
         lossinfo= dict(
             reconstruction = reconstruction_loss,
@@ -142,11 +144,16 @@ class Model:
     # the updates!
     def update_a(self,X):
         resid = X - (self.gene_reconstruction() +self.b[None,:,:]) # M x R x C
-        self.a = clip(np.mean(np.mean(resid,axis=1),axis=1))
+
+        resid = resid / self.sigsq[None,:,:]
+        resid = np.sum(np.sum(resid,axis=1),axis=1) # M
+        resid = resid / np.sum(self.sigsq)
+
+        self.a = clip(resid) # M
 
     def update_b(self,X):
-        resid = X - (self.gene_reconstruction() +self.a[:, None,None])
-        self.b = clip(np.mean(resid,axis=0))
+        resid = X - (self.gene_reconstruction() +self.a[:, None,None]) # M x R x C
+        self.b = clip(np.mean(resid,axis=0)) #  R x C
 
     def update_F(self,X):
         N=self.R*self.C
@@ -156,12 +163,15 @@ class Model:
         G = self.frame_loadings().reshape((N,self.J))
 
         # collect fr things we'll need later
+        ooss=1.0/self.sigsq.ravel() # N
         framel1 = np.sum(G,axis=0)
-        framel2 = np.sum(G**2,axis=0)
+        framel2 = np.sum(ooss[:,None] * G**2,axis=0)
 
-        xmabl= (X - self.ab_reconstruction() - self.lam).reshape((self.M,N))
-        Kxmabl = self.K @ xmabl
+        # xmab= (X - self.ab_reconstruction()).reshape((self.M,N))
+        # xmab_oss_ml = (xmab / oss[None,:]) - lam
+        xmabl=(X - self.ab_reconstruction()).reshape((self.M,N)) - self.lam
         riemannian = G.T@ G
+
 
         # updating Y, one column at at time (in a random order)
         for j in npr.permutation(self.J):
@@ -173,10 +183,14 @@ class Model:
             basically this:
                 recon = self.reconstruction().reshape((self.M,N))
                 recon_without_j_loadings = recon - np.outer(self.F_blurred[:,j],G[:,j])
-                residual_without_j_loadings = X.reshape((self.M,N)) - recon_without_j_loadings
+                residual_without_j_loadings = (X.reshape((self.M,N)) - recon_without_j_loadings) / ooss[None,:]
                 phi = self.K @ (residual_without_j_loadings - self.lam) @ G[:,j]
 
+                Gamma x = framel2[j]*(self.K.H@(self.K@x))
+
             but that's kind of slow to do for every j.  so, instead:
+
+                phi = self.K @ (xmab/oss - recon_without_j_loadings - lam) @ G[:,j]
             '''
 
             phi = self.K@(xmabl @ G[:,j] - self.F_blurred@riemannian[:,j] + self.F_blurred[:,j]*framel2[j])
@@ -235,4 +249,7 @@ class Model:
             Gamma_c = np.einsum('r,rck->ck',self.alpha[:,c1]**2,FZ_gamma)
             phi_c = np.einsum('r,mr,mrc->c',self.alpha[:,c1],xmabl[:,:,c1],FZ)
             A,b=quadratic_form_to_nnls_form(Gamma_c,phi_c)
+
+            # TODO: enforce varphi[i,i]=1
+
             self.varphi[c1]= sp.optimize.nnls(A,b)[0]

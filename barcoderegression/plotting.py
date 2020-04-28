@@ -13,11 +13,11 @@ def plot_raw_data_2d(X):
                 if r==0:
                     plt.title(f"Ch:{c}",fontsize=30)
                 if c==0:
-                    plt.ylabel(f"Ch:{c}",fontsize=30)
+                    plt.ylabel(f"R:{r}",fontsize=30)
 
                 plt.imshow(X[:,:,r,c],vmin=0,vmax=X.max())
 
-def plotspot(X,loc,barcode=None,radius=10,sz=1,sideplot=False):
+def plotspot(X,loc,barcode=None,radius=10,sz=1,sideplot=False,extry=None):
     loc=np.array(loc)
     st=np.max([np.zeros(len(loc)),loc-radius],axis=0)
     center = loc-st
@@ -78,6 +78,8 @@ def plotspot(X,loc,barcode=None,radius=10,sz=1,sideplot=False):
         measurements=np.array([m[x] for (x,m) in zip(order,measurements)])
         plt.imshow(measurements,vmin=0,vmax=1)
         plt.axis('off')
+
+    return sl,center
 
 class AnimAcross:
     def __init__(self,ratio=.8,sz=4,columns=None,aa=None):
