@@ -5,7 +5,6 @@ import scipy as sp
 import scipy.ndimage
 import numpy.random as npr
 
-from . import blurkernels
 
 def unif(a,b,*shape):
     return npr.rand(*shape)*(b-a)+a

@@ -1,7 +1,6 @@
 import numpy as np
 import scipy as sp
 import scipy.ndimage
-from . import blurkernels
 
 import scipy.optimize
 import scipy.linalg
