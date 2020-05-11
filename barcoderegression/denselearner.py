@@ -137,9 +137,9 @@ class Model:
     def F_scaled(self,blurred=False):
         framel1=tf.reduce_sum(tf.reduce_sum(self.frame_loadings(),axis=0),axis=0)
         if blurred:
-            return framel1[None,:] * self.F_blurred
+            return (framel1[None,:] * self.F_blurred).numpy()
         else:
-            return framel1[None,:] * self.F
+            return (framel1[None,:] * self.F).numpy()
 
     # reconstructions
     def Z(self):

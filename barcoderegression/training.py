@@ -1,8 +1,9 @@
 import numpy as np
+import tensorflow as tf
 
 class Trainer:
     def __init__(self,X,model):
-        X=np.require(X,dtype=np.float)
+        X=tf.convert_to_tensor(X,dtype=tf.float64)
         self.X=X
         self.model=model
 
@@ -43,9 +44,8 @@ class Trainer:
         plt.gca().set_yscale('log')
 
         lossinfo=self.model.loss(self.X)
-        print('final reconstruction loss per observation',lossinfo['reconstruction']/self.model.nobs)
-        print('final L1 loss per observation            ',self.model.lam*lossinfo['l1']/self.model.nobs)
-        print('final loss per observation               ',lossinfo['loss'])
+        for nm in lossinfo:
+            print(nm.rjust(20),f'{lossinfo[nm]:.2e}')
 
         if print_bads:
             bads=[x for x in self.losses if x['improvement']<0]
