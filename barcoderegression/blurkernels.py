@@ -2,6 +2,11 @@ import numpy as np
 import scipy as sp
 import scipy.ndimage
 
+
+class GaussianBlur:
+    def __init__(self):
+        pass
+
 class NoBlur:
     def __init__(self):
         self.trivial=True

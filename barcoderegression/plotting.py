@@ -1,6 +1,34 @@
 import matplotlib.pylab as plt
 import numpy as np
 
+def plot_rbc(R,C,callback,sideways=False,notick=False,**kwargs):
+    if sideways:
+        with AnimAcross(columns=R,**kwargs) as a:
+            for c in range(C):
+                for r in range(R):
+                    ~a
+                    if r==0:
+                        plt.ylabel(f"Ch:{c}",fontsize=30)
+                    if c==0:
+                        plt.title(f"R:{r}",fontsize=30)
+                    if notick:
+                        plt.xticks([]); plt.yticks([]);
+
+                    callback(r,c)
+    else:
+        with AnimAcross(columns=C,**kwargs) as a:
+            for r in range(R):
+                for c in range(C):
+                    ~a
+                    if r==0:
+                        plt.title(f"Ch:{c}",fontsize=30)
+                    if c==0:
+                        plt.ylabel(f"R:{r}",fontsize=30)
+                    if notick:
+                        plt.xticks([]); plt.yticks([]);
+
+                    callback(r,c)
+
 def plot_raw_data_2d(X):
     X=np.require(X)
     assert len(X.shape)==4,f"shape should be (spatialdim1,spatialdim2,rows,cols), but was given {X.shape}"
@@ -16,6 +44,7 @@ def plot_raw_data_2d(X):
                     plt.ylabel(f"R:{r}",fontsize=30)
 
                 plt.imshow(X[:,:,r,c],vmin=0,vmax=X.max())
+                plt.xticks([]); plt.yticks([]);
 
 def plotspot(X,loc,barcode=None,radius=10,sz=1,sideplot=False,extry=None):
     loc=np.array(loc)
@@ -82,13 +111,14 @@ def plotspot(X,loc,barcode=None,radius=10,sz=1,sideplot=False,extry=None):
     return sl,center
 
 class AnimAcross:
-    def __init__(self,ratio=.8,sz=4,columns=None,aa=None):
+    def __init__(self,ratio=.8,sz=4,columns=None,aa=None,asp=1.0):
         self.aa=aa
         self.axes_list=[]
         self.cbs={}
         self.ratio=ratio
         self.sz=sz
         self.columns=columns
+        self.asp=asp
 
     def __enter__(self):
         if self.aa is not None:
@@ -144,7 +174,7 @@ class AnimAcross:
                 rows=len(self.axes_list)//cols + 1
             dims=(rows,cols)
 
-        plt.gcf().set_size_inches(self.sz,self.sz)
+        plt.gcf().set_size_inches(self.sz,self.sz*self.asp)
         k=0
 
         for j in range(dims[0]):
