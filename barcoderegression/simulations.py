@@ -12,9 +12,11 @@ def unif(a,b,*shape):
 def simulate(codebook,spatial_dims,num_polonies,
             blur=3,noise=.1,genedistr=None,
             varphi=None,scale_lo=1,scale_hi=2,rho=None,
+             seed = 0,
             alpha=None):
     R,C,J=codebook.shape
     spatial_dims=tuple(spatial_dims)
+    npr.seed(seed)
 
     # get rolony densities
     if genedistr is None:
